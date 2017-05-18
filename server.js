@@ -17,6 +17,7 @@ const async = require('async');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const querystring = require('querystring');
+const config = require('./config.json');
 
 //Constants for API access
 const TOKEN_URL = "https://sandbox.apihub.citi.com/gcb/api/authCode/oauth2/token/us/gcb"; //HTTPS endpoint to retrieve token
