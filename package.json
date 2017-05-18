@@ -1,0 +1,17 @@
+{
+  "name": "sample_app",
+  "version": "1.0.0",
+  "description": "A sample application to demonstrate three-legged OAuth and basic account information retrieval",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Test",
+  "license": "ISC",
+  "dependencies": {
+    "async": "^2.3.0",
+    "axios": "^0.16.1",
+    "body-parser": "^1.17.1",
+    "express": "^4.15.2"
+  }
+}
