@@ -10,9 +10,10 @@ const querystring = require("querystring");
 const config = require("./config.json");
 
 //Constants for API access
-const TOKEN_URL =
-  "https://sandbox.apihub.citi.com/gcb/api/authCode/oauth2/token/us/gcb"; //HTTPS endpoint to retrieve token
-const ACCOUNTS_URL = "https://sandbox.apihub.citi.com/gcb/api/v1/accounts"; //HTTPS endpoint to retrieve account summary
+const BASE_URL = 'https://sandbox.apihub.citi.com/gcb/api';
+const TOKEN_URL = `${BASE_URL}/authCode/oauth2/token/us/gcb`; //HTTPS endpoint to retrieve token
+const ACCOUNTS_URL = `${BASE_URL}/v1/accounts`; //HTTPS endpoint to retrieve account summary
+const ACCOUNT_TRANSACTIONS_URL = `${BASE_URL}/v1/accounts/{accountId}/transactions`; //HTTPS endpoint to retrieve account transactions
 const CONTENT_TYPE = "application/x-www-form-urlencoded"; //content type for header
 const GRANT_TYPE = "authorization_code";
 const REDIRECT_URI = "https://127.0.0.1:3000/accounts/retrieve"; //URI to redirect to after successfully logging in at Citi redirect
@@ -50,32 +51,32 @@ app.get("/accounts/*", function(req, res) {
     );
   } else {
     //code exists, use it to fetch account information
-    async.waterfall(
-      //synchronous calls to get token first, then account
-      [
-        //bootstrapping function to pass code into fetchToken
-        function(callback) {
-          callback(null, code);
-        },
-        fetchToken, //function to retrieve access_token
-        fetchAccount //function to retrieve account
-      ],
-      function(err, successfulAccount) {
-        //error case: https request
-        if (err) {
-          res.send(
-            "<h1>Something Went Wrong. Try again.</h1><p>Error: " + err + "</p>"
-          );
-        } else {
-          //Success: send account information
-          res.send(
-            '<script src="https://cdn.rawgit.com/google/code-prettify/master/loader/run_prettify.js"></script><pre class="prettyprint">' +
-              successfulAccount +
-              "</pre>"
-          );
-        }
-      }
-    );
+    return new Promise((resolve, reject) => {
+			return fetchToken(code)
+				.then(access_token => {
+					return resolve(Object.assign({}, {access_token: access_token}));
+				}, err => {
+					return reject(err);
+				})
+		})
+		.then(workspace => {
+			return fetchAccounts(workspace.access_token)
+				.then(successfulAccounts => {
+					return Object.assign(workspace, {successfulAccounts: successfulAccounts});
+				}, err => {
+					throw err;
+				})
+		})
+		.then(workspace => {
+			res.send(
+				'<script src="https://cdn.rawgit.com/google/code-prettify/master/loader/run_prettify.js"></script><pre class="prettyprint">' +
+				workspace.successfulAccounts +
+				'</pre>'
+				);
+		}, err => {
+			console.log(err);
+			res.send('<h1>Something Went Wrong. Try again.</h1><p>Error: ' + err + '</p>');
+		})
   }
 });
 
@@ -92,36 +93,36 @@ app.set("port", port);
 const server = https.createServer(options, app);
 
 //display console message for where server is listening
-server.listen(port, () => console.log(`API running on localhost:${port}`));
+server.listen(port, '0.0.0.0', () => console.log(`API running on localhost:${port}`));
 
 /**
 takes a code, and a callback function for use with async waterfall
 
 calls Citi endpoint to exchange a code for an access token.
 */
-function fetchToken(code, callback) {
-  //https request
-  axios({
-    method: "post",
-    url: TOKEN_URL,
-    headers: {
-      Authorization: ENCODED_ID_SECRET,
-      "Content-Type": CONTENT_TYPE
-    },
-    data: querystring.stringify({
-      grant_type: GRANT_TYPE,
-      redirect_uri: REDIRECT_URI,
-      code: code
+function fetchToken(code) {
+	return new Promise((resolve, reject) => {
+		//https request
+		return axios({
+			method: 'post',
+			url: TOKEN_URL,
+			headers:{
+				"Authorization": ENCODED_ID_SECRET,
+				"Content-Type": CONTENT_TYPE
+			},
+			data: querystring.stringify({
+				"grant_type": GRANT_TYPE,
+				"redirect_uri": REDIRECT_URI,
+				"code":code
+			})
+		}).then((response) => {
+			var access_token = response.data['access_token'];
+			return resolve(access_token)
     })
-  })
-    .then(function(response) {
-      var access_token = response.data["access_token"];
-      callback(null, access_token);
-    })
-    .catch(function(error) {
-      //pass error to async.waterfall
-      callback(error, null);
-    });
+    .catch((error) => {
+  			return reject(error);
+  		});
+  	})
 }
 
 /**
@@ -129,23 +130,23 @@ takes an access_token and a callback function for use with async waterfall
 
 calls citi endpoint with a client ID and access token to retrieve account information
 */
-function fetchAccount(token, callback) {
-  access_token = "Bearer " + token;
-  axios({
-    method: "get",
-    url: ACCOUNTS_URL,
-    headers: {
-      Authorization: access_token,
-      uuid: SAMPLE_UUID,
-      Accept: ACCEPT,
-      client_id: CLIENT_ID
-    }
-  })
-    .then(function(response) {
-      var successfulAccount = JSON.stringify(response.data, undefined, 2);
-      callback(null, successfulAccount);
-    })
-    .catch(function(error) {
-      callback(error, null);
-    });
+function fetchAccounts(token) {
+	return new Promise((resolve, reject) => {
+		access_token = "Bearer " + token;
+		axios({
+			method: 'get',
+			url: ACCOUNTS_URL,
+			headers: {
+				"Authorization": access_token,
+				"uuid": SAMPLE_UUID,
+				"Accept": ACCEPT,
+				"client_id": CLIENT_ID
+			}
+		}).then((response) => {
+			var successfulAccounts = JSON.stringify(response.data, undefined, 2);
+			return resolve(successfulAccounts);
+		}).catch((error) => {
+			return reject(error);
+		});
+	})
 }
